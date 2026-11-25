@@ -1,0 +1,72 @@
+// Prisma Schema SCOUT (Securities Crowdfunding Companion)
+// Menjadi single source of truth untuk skema basis data seluruh fitur.
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// ==========================================
+// Domain Fitur: Autentikasi & Akun Pengguna (US-01 / US-24)
+// ==========================================
+
+model User {
+  id                 String     @id @default(uuid())
+  nama               String
+  email              String     @unique
+  passwordHash       String     @map("password_hash")
+  emailTerverifikasi Boolean    @default(false) @map("email_terverifikasi")
+  dibuatPada         DateTime   @default(now()) @map("dibuat_pada")
+  updatedAt          DateTime   @updatedAt @map("updated_at")
+
+  emailOtps          EmailOtp[]
+  businessProfile    BusinessProfile?
+
+  @@map("users")
+}
+
+model EmailOtp {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  kodeHash        String   @map("kode_hash")
+  dibuatPada      DateTime @default(now()) @map("dibuat_pada")
+  kedaluwarsaPada DateTime @map("kedaluwarsa_pada")
+  digunakan       Boolean  @default(false)
+  jumlahPercobaan Int      @default(0) @map("jumlah_percobaan")
+  tidakBerlaku    Boolean  @default(false) @map("tidak_berlaku")
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("email_otps")
+}
+
+// ==========================================
+// Domain Fitur: Profil Bisnis & Kebutuhan Dana (US-02 / F-02)
+// ==========================================
+
+model BusinessProfile {
+  id                  String   @id @default(uuid())
+  userId              String   @unique @map("user_id")
+  namaBisnis          String   @default("") @map("nama_bisnis")
+  badanHukum          String   @map("badan_hukum")
+  sektor              String
+  kebutuhanDana       Float    @map("kebutuhan_dana")
+  kondisiDokumen      String   @map("kondisi_dokumen")
+  jangkaWaktuBulan    Int      @default(12) @map("jangka_waktu_bulan")
+  tujuanPendanaan     String   @default("Pengembangan Usaha") @map("tujuan_pendanaan")
+  rencanaPenggunaan   String   @default("") @map("rencana_penggunaan")
+  penjelasanPenggunaan String  @default("") @map("penjelasan_penggunaan")
+  dokumenPendukungUrl String?  @map("dokumen_pendukung_url")
+  statusDraf          Boolean  @default(false) @map("status_draf")
+  platformTujuanId    String?  @map("platform_tujuan_id")
+  diperbaruiPada      DateTime @default(now()) @updatedAt @map("diperbarui_pada")
+
+  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("business_profiles")
+}
