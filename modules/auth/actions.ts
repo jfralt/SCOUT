@@ -584,3 +584,93 @@ export async function getMyMatchmakingAction(): Promise<{
     matchmaking,
   };
 }
+
+/**
+ * Server Action: Ambil detail penyelenggara SCF (US-35 / US-08)
+ */
+export async function getPlatformDetailAction(platformId: string): Promise<{
+  platform: any;
+  isPremium: boolean;
+  isCurrentlySelected: boolean;
+} | null> {
+  const user = await getSessionUser();
+  if (!user) return null;
+
+  const { getPlatformById, getUserTier, getBusinessProfileByUserId } = await import("./utils/db");
+  const platform = getPlatformById(platformId);
+  if (!platform) return null;
+
+  const userTier = getUserTier(user.id);
+  const isPremium = userTier !== "FREE";
+
+  const profile = getBusinessProfileByUserId(user.id);
+  const isCurrentlySelected = profile?.platform_tujuan_id === platformId;
+
+  // Jika akun FREE, sembunyikan kolom lengkap di server (US-35 AC3)
+  const sanitizedPlatform = isPremium
+    ? platform
+    : {
+        id: platform.id,
+        nama: platform.nama,
+        fokus_sektor: platform.fokus_sektor,
+        deskripsi: platform.deskripsi,
+        keunggulan: platform.keunggulan,
+        diperbarui_pada: platform.diperbarui_pada,
+        // Kolom lengkap disembunyikan di sisi server
+        profil_singkat: null,
+        persyaratan_umum: null,
+        tahapan_proses: null,
+        estimasi_biaya: platform.estimasi_biaya,
+        jenis_efek_didukung: platform.jenis_efek_didukung,
+      };
+
+  return {
+    platform: sanitizedPlatform,
+    isPremium,
+    isCurrentlySelected,
+  };
+}
+
+/**
+ * Server Action: Pilih Penyelenggara Sebagai Tujuan (US-35 AC4 / D7)
+ */
+export async function selectPlatformAction(platformId: string): Promise<{ success: boolean; message: string }> {
+  const user = await getSessionUser();
+  if (!user) {
+    return { success: false, message: "Sesi Anda telah berakhir. Silakan login kembali." };
+  }
+
+  const { selectPlatformAsTarget } = await import("./utils/db");
+  selectPlatformAsTarget(user.id, platformId);
+
+  revalidatePath("/dashboard");
+  revalidatePath("/matchmaking");
+  revalidatePath(`/platforms/${platformId}`);
+
+  return {
+    success: true,
+    message: "Penyelenggara berhasil dipilih sebagai tujuan penerbitan!",
+  };
+}
+
+/**
+ * Server Action: Upgrade Simulasi Tingkat Layanan Akun (US-08 AC4)
+ */
+export async function upgradeTierAction(newTier: "PREMIUM" | "CONSULTING" | "FULL_SERVICE" = "PREMIUM"): Promise<{ success: boolean; message: string }> {
+  const user = await getSessionUser();
+  if (!user) {
+    return { success: false, message: "Sesi Anda telah berakhir." };
+  }
+
+  const { upgradeUserTier } = await import("./utils/db");
+  upgradeUserTier(user.id, newTier);
+
+  revalidatePath("/dashboard");
+  revalidatePath("/matchmaking");
+
+  return {
+    success: true,
+    message: `Akun Anda berhasil ditingkatkan ke tingkat ${newTier}! Seluruh fitur kurasi telah terbuka.`,
+  };
+}
+

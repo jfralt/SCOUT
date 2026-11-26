@@ -58,6 +58,12 @@ export function getDatabase(): DatabaseSync {
       db.exec("ALTER TABLE users ADD COLUMN dibuat_pada DATETIME");
       db.exec("UPDATE users SET dibuat_pada = COALESCE(created_at, CURRENT_TIMESTAMP)");
     }
+    if (!columnNames.includes("tingkat_layanan")) {
+      db.exec("ALTER TABLE users ADD COLUMN tingkat_layanan TEXT DEFAULT 'FREE'");
+    }
+    if (!columnNames.includes("tingkat_diperbarui_pada")) {
+      db.exec("ALTER TABLE users ADD COLUMN tingkat_diperbarui_pada DATETIME");
+    }
   } catch (err) {
     console.error("Migration notice for users table:", err);
   }
@@ -159,7 +165,7 @@ export function getDatabase(): DatabaseSync {
     CREATE INDEX IF NOT EXISTS idx_consents_user_jenis ON consents(user_id, jenis);
   `);
 
-  // Inisialisasi tabel platforms (US-05)
+  // Inisialisasi tabel platforms (US-05 / US-35)
   db.exec(`
     CREATE TABLE IF NOT EXISTS platforms (
       id TEXT PRIMARY KEY,
@@ -171,11 +177,35 @@ export function getDatabase(): DatabaseSync {
       jenis_efek_didukung TEXT NOT NULL,
       estimasi_biaya REAL NOT NULL,
       deskripsi TEXT,
+      profil_singkat TEXT,
+      persyaratan_umum TEXT,
+      tahapan_proses TEXT,
       keunggulan TEXT,
       aktif INTEGER DEFAULT 1,
+      diperbarui_pada DATETIME DEFAULT CURRENT_TIMESTAMP,
       dibuat_pada DATETIME DEFAULT CURRENT_TIMESTAMP
     );
   `);
+
+  // Migrasi aman untuk platforms US-35
+  try {
+    const platInfo = db.prepare("PRAGMA table_info(platforms)").all() as Array<{ name: string }>;
+    const platCols = platInfo.map((c) => c.name);
+    if (!platCols.includes("profil_singkat")) {
+      db.exec("ALTER TABLE platforms ADD COLUMN profil_singkat TEXT");
+    }
+    if (!platCols.includes("persyaratan_umum")) {
+      db.exec("ALTER TABLE platforms ADD COLUMN persyaratan_umum TEXT");
+    }
+    if (!platCols.includes("tahapan_proses")) {
+      db.exec("ALTER TABLE platforms ADD COLUMN tahapan_proses TEXT");
+    }
+    if (!platCols.includes("diperbarui_pada")) {
+      db.exec("ALTER TABLE platforms ADD COLUMN diperbarui_pada DATETIME");
+    }
+  } catch (err) {
+    console.error("Migration notice for platforms table:", err);
+  }
 
   // Seeding default document requirements & platforms jika masih kosong
   seedDefaultRequirementsAndPlatforms(db);
@@ -259,66 +289,82 @@ function seedDefaultRequirementsAndPlatforms(db: DatabaseSync): void {
   }
 
   // Seed Platforms
+  const defaultPlatforms = [
+    {
+      id: "plat-bizhare",
+      nama: "Bizhare",
+      fokus_sektor: "F&B, Ritel, Jasa, Waralaba",
+      badan_hukum_diterima: "PT",
+      dana_minimum: 500000000,
+      dana_maksimum: 10000000000,
+      jenis_efek_didukung: "SAHAM, SUKUK, OBLIGASI",
+      estimasi_biaya: 25000000,
+      deskripsi: "Platform SCF terdepan untuk waralaba kuliner, ritel ritel modern, dan ekspansi cabang bisnis consumer goods.",
+      profil_singkat: "Bizhare adalah penyelenggara Securities Crowdfunding berizin dan diawasi OJK yang berfokus pada ekspansi gerai kuliner, waralaba nasional, dan ritel modern dengan basis investor ritel terbesar di Indonesia.",
+      persyaratan_umum: "1. Bentuk badan usaha wajib berbadan hukum Perseroan Terbatas (PT)\n2. Memiliki NIB aktif berbasis risiko OSS RBA\n3. Laporan keuangan historis minimal 1-2 tahun buku terakhir\n4. Prospektus bisnis komprehensif dan proyeksi arus kas realistis",
+      tahapan_proses: "Tahap 1: Pendaftaran profil & initial screening (3 hari kerja)\nTahap 2: Legal, financial, & operational due diligence (2 minggu)\nTahap 3: Listing penawaran umum efek kepada pemodal (maksimal 45 hari)\nTahap 4: Penutupan penawaran, distribusi dana, dan pelaporan berkala",
+      keunggulan: "Basis investor ritel terbesar di sektor F&B dan waralaba nasional.",
+      diperbarui_pada: "15 Nov 2026",
+      aktif: 1,
+    },
+    {
+      id: "plat-santara",
+      nama: "Santara",
+      fokus_sektor: "F&B, Manufaktur, Agrikultur, Ritel",
+      badan_hukum_diterima: "PT",
+      dana_minimum: 1000000000,
+      dana_maksimum: 10000000000,
+      jenis_efek_didukung: "SAHAM",
+      estimasi_biaya: 30000000,
+      deskripsi: "Pelopor equity crowdfunding di Indonesia yang berfokus pada UKM skala berkembang dengan track record solid.",
+      profil_singkat: "Santara merupakan pionir urun dana ekuitas (Equity Crowdfunding) pertama di Indonesia yang berizin resmi OJK, memprioritaskan bisnis dengan aset produktif dan rekam jejak operasional yang matang.",
+      persyaratan_umum: "1. Berbadan hukum PT dengan legalitas AHU lengkap\n2. Memiliki rekam jejak bisnis berjalan minimal 2 tahun\n3. Laporan laba rugi positif dan neraca seimbang\n4. Memiliki komitmen transparansi keterbukaan informasi publik",
+      tahapan_proses: "Tahap 1: Verifikasi dokumen awal & wawancara manajemen\nTahap 2: Audit kelayakan finansial & inspeksi lapangan\nTahap 3: Kampanye penawaran saham di platform Santara\nTahap 4: Pembagian dividen dan pencatatan kepemilikan saham pemodal",
+      keunggulan: "Spesialisasi penerbitan saham ekuitas UKM dengan likuiditas tinggi di pasar sekunder.",
+      diperbarui_pada: "18 Nov 2026",
+      aktif: 1,
+    },
+    {
+      id: "plat-shafiq",
+      nama: "Shafiq",
+      fokus_sektor: "F&B, Jasa, Kesehatan, Properti, Teknologi",
+      badan_hukum_diterima: "PT, CV",
+      dana_minimum: 500000000,
+      dana_maksimum: 10000000000,
+      jenis_efek_didukung: "SUKUK, SAHAM",
+      estimasi_biaya: 20000000,
+      deskripsi: "Penyelenggara Securities Crowdfunding Syariah berizin OJK dengan skema akad sukuk mudharabah/musyarakah.",
+      profil_singkat: "Shafiq adalah platform Securities Crowdfunding syariah berizin dan diawasi OJK serta DSN-MUI, memfasilitasi pendanaan efek berbasis syariah tanpa riba, gharar, atau maysir.",
+      persyaratan_umum: "1. Badan usaha PT atau CV dengan kegiatan operasional halal\n2. Tidak terlibat dalam aktivitas usaha yang bertentangan dengan prinsip syariah\n3. Laporan keuangan terstruktur dan mutasi rekening koran operasional\n4. Rencana kerja dan proyek penawaran sukuk yang jelas",
+      tahapan_proses: "Tahap 1: Analisis kesesuaian prinsip syariah oleh Tim Ahli Syariah\nTahap 2: Kurasi risiko dan penetapan skema akad (Mudharabah/Musyarakah)\nTahap 3: Masa penawaran sukuk secara online di Shafiq\nTahap 4: Pembayaran bagi hasil berkala kepada para pemodal",
+      keunggulan: "Kepatuhan syariah ketat dan akses ke komunitas investor syariah berdaya beli tinggi.",
+      diperbarui_pada: "20 Nov 2026",
+      aktif: 1,
+    },
+    {
+      id: "plat-landx",
+      nama: "LandX (Danasaham)",
+      fokus_sektor: "F&B, Properti, Manufaktur, Jasa",
+      badan_hukum_diterima: "PT",
+      dana_minimum: 1000000000,
+      dana_maksimum: 10000000000,
+      jenis_efek_didukung: "SAHAM, OBLIGASI",
+      estimasi_biaya: 28000000,
+      deskripsi: "Platform urun dana efek dengan fokus pada bisnis beraset produktif dan pertumbuhan stabil.",
+      profil_singkat: "LandX (PT Nummus Bersama Indonesia) adalah platform SCF berizin OJK yang mengkhususkan diri pada pendanaan perusahaan berkembang yang memiliki aset riil dan dividen berkala.",
+      persyaratan_umum: "1. Badan hukum PT dengan permodalan dan pengurus yang jelas\n2. Usaha telah membukukan laba operasional bersih\n3. Memiliki dokumen perizinan operasional (AMDAL/SPPL jika disyaratkan)\n4. Kesiapan membagikan dividen tunai kepada investor setiap kuartal",
+      tahapan_proses: "Tahap 1: Pengajuan proposal penawaran & verifikasi legalitas\nTahap 2: Due diligence menyeluruh oleh komite kurasi LandX\nTahap 3: Penawaran umum kepada ribuan investor terdaftar\nTahap 4: Pengesahan perubahan anggaran dasar penambahan modal",
+      keunggulan: "Due diligence mendalam dengan dukungan jaringan penjamin emisi berpengalaman.",
+      diperbarui_pada: "12 Nov 2026",
+      aktif: 1,
+    },
+  ];
+
   const platCount = db.prepare("SELECT COUNT(*) as count FROM platforms").get() as { count: number };
   if (platCount.count === 0) {
-    const defaultPlatforms = [
-      {
-        id: "plat-bizhare",
-        nama: "Bizhare",
-        fokus_sektor: "F&B, Ritel, Jasa, Waralaba",
-        badan_hukum_diterima: "PT",
-        dana_minimum: 500000000,
-        dana_maksimum: 10000000000,
-        jenis_efek_didukung: "SAHAM, SUKUK, OBLIGASI",
-        estimasi_biaya: 25000000,
-        deskripsi: "Platform SCF terdepan untuk waralaba kuliner, ritel ritel modern, dan ekspansi cabang bisnis consumer goods.",
-        keunggulan: "Basis investor ritel terbesar di sektor F&B dan waralaba nasional.",
-        aktif: 1,
-      },
-      {
-        id: "plat-santara",
-        nama: "Santara",
-        fokus_sektor: "F&B, Manufaktur, Agrikultur, Ritel",
-        badan_hukum_diterima: "PT",
-        dana_minimum: 1000000000,
-        dana_maksimum: 10000000000,
-        jenis_efek_didukung: "SAHAM",
-        estimasi_biaya: 30000000,
-        deskripsi: "Pelopor equity crowdfunding di Indonesia yang berfokus pada UKM skala berkembang dengan track record solid.",
-        keunggulan: "Spesialisasi penerbitan saham ekuitas UKM dengan likuiditas tinggi di pasar sekunder.",
-        aktif: 1,
-      },
-      {
-        id: "plat-shafiq",
-        nama: "Shafiq",
-        fokus_sektor: "F&B, Jasa, Kesehatan, Properti, Teknologi",
-        badan_hukum_diterima: "PT, CV",
-        dana_minimum: 500000000,
-        dana_maksimum: 10000000000,
-        jenis_efek_didukung: "SUKUK, SAHAM",
-        estimasi_biaya: 20000000,
-        deskripsi: "Penyelenggara Securities Crowdfunding Syariah berizin OJK dengan skema akad sukuk mudharabah/musyarakah.",
-        keunggulan: "Kepatuhan syariah ketat dan akses ke komunitas investor syariah berdaya beli tinggi.",
-        aktif: 1,
-      },
-      {
-        id: "plat-landx",
-        nama: "LandX (Danasaham)",
-        fokus_sektor: "F&B, Properti, Manufaktur, Jasa",
-        badan_hukum_diterima: "PT",
-        dana_minimum: 1000000000,
-        dana_maksimum: 10000000000,
-        jenis_efek_didukung: "SAHAM, OBLIGASI",
-        estimasi_biaya: 28000000,
-        deskripsi: "Platform urun dana efek dengan fokus pada bisnis beraset produktif dan pertumbuhan stabil.",
-        keunggulan: "Due diligence mendalam dengan dukungan jaringan penjamin emisi berpengalaman.",
-        aktif: 1,
-      },
-    ];
-
     const insertPlat = db.prepare(`
-      INSERT INTO platforms (id, nama, fokus_sektor, badan_hukum_diterima, dana_minimum, dana_maksimum, jenis_efek_didukung, estimasi_biaya, deskripsi, keunggulan, aktif)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO platforms (id, nama, fokus_sektor, badan_hukum_diterima, dana_minimum, dana_maksimum, jenis_efek_didukung, estimasi_biaya, deskripsi, profil_singkat, persyaratan_umum, tahapan_proses, keunggulan, diperbarui_pada, aktif)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     for (const p of defaultPlatforms) {
@@ -332,9 +378,27 @@ function seedDefaultRequirementsAndPlatforms(db: DatabaseSync): void {
         p.jenis_efek_didukung,
         p.estimasi_biaya,
         p.deskripsi,
+        p.profil_singkat,
+        p.persyaratan_umum,
+        p.tahapan_proses,
         p.keunggulan,
+        p.diperbarui_pada,
         p.aktif
       );
+    }
+  } else {
+    // Pastikan data detail US-35 terisi jika sebelumnya belum ada
+    const updatePlat = db.prepare(`
+      UPDATE platforms SET
+        profil_singkat = COALESCE(profil_singkat, ?),
+        persyaratan_umum = COALESCE(persyaratan_umum, ?),
+        tahapan_proses = COALESCE(tahapan_proses, ?),
+        diperbarui_pada = COALESCE(diperbarui_pada, ?)
+      WHERE id = ?
+    `);
+
+    for (const p of defaultPlatforms) {
+      updatePlat.run(p.profil_singkat, p.persyaratan_umum, p.tahapan_proses, p.diperbarui_pada, p.id);
     }
   }
 }
@@ -1064,3 +1128,76 @@ export function computeDashboardMetrics(
     estimasiWaktuSiap,
   };
 }
+
+// ==========================================
+// Platform Detail & Target Platform Selection (US-35)
+// ==========================================
+
+export function getPlatformById(id: string): PlatformRecord | null {
+  const db = getDatabase();
+  const row = db.prepare("SELECT * FROM platforms WHERE id = ?").get(id) as PlatformRecord | undefined;
+  return row || null;
+}
+
+export function selectPlatformAsTarget(userId: string, platformId: string): void {
+  const db = getDatabase();
+  const now = new Date().toISOString();
+  db.prepare(`
+    UPDATE business_profiles 
+    SET platform_tujuan_id = ?, diperbarui_pada = ? 
+    WHERE user_id = ?
+  `).run(platformId, now, userId);
+}
+
+// ==========================================
+// Service Tier Operations (US-08)
+// ==========================================
+
+export function getUserTier(userId: string): string {
+  const db = getDatabase();
+  const row = db.prepare("SELECT COALESCE(tingkat_layanan, 'FREE') as tier FROM users WHERE id = ?").get(userId) as { tier: string } | undefined;
+  return row?.tier || "FREE";
+}
+
+export function upgradeUserTier(userId: string, newTier: string): void {
+  const db = getDatabase();
+  const now = new Date().toISOString();
+  db.prepare(`
+    UPDATE users 
+    SET tingkat_layanan = ?, tingkat_diperbarui_pada = ? 
+    WHERE id = ?
+  `).run(newTier, now, userId);
+}
+
+// ==========================================
+// Aktivitas Terbaru (US-16 / Mockup Dashboard)
+// ==========================================
+
+export function getRecentActivities(userId: string): Array<{
+  id: string;
+  judul: string;
+  tanggal: string;
+  tipe: "revisi" | "valid" | "info";
+}> {
+  return [
+    {
+      id: "act-1",
+      judul: "Laporan arus kas ditandai perlu revisi",
+      tanggal: "10 Nov 2026",
+      tipe: "revisi",
+    },
+    {
+      id: "act-2",
+      judul: "NIB berhasil diverifikasi",
+      tanggal: "08 Nov 2026",
+      tipe: "valid",
+    },
+    {
+      id: "act-3",
+      judul: "Akta pendirian dinyatakan valid",
+      tanggal: "10 Nov 2026",
+      tipe: "valid",
+    },
+  ];
+}
+

@@ -4,6 +4,8 @@ export interface UserRecord {
   email: string;
   password_hash: string;
   email_terverifikasi: number | boolean;
+  tingkat_layanan?: string;
+  tingkat_diperbarui_pada?: string | null;
   dibuat_pada: string;
   updated_at?: string;
 }
@@ -24,6 +26,7 @@ export interface UserProfile {
   nama: string;
   email: string;
   email_terverifikasi: boolean;
+  tingkat_layanan?: string;
 }
 
 export interface AuthActionResult {
@@ -118,8 +121,12 @@ export interface PlatformRecord {
   jenis_efek_didukung: string;
   estimasi_biaya: number;
   deskripsi?: string | null;
+  profil_singkat?: string | null;
+  persyaratan_umum?: string | null;
+  tahapan_proses?: string | null;
   keunggulan?: string | null;
   aktif: number | boolean;
+  diperbarui_pada?: string;
   dibuat_pada: string;
 }
 

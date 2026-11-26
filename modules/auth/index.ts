@@ -15,8 +15,9 @@ export { default as BusinessProfileWizard } from "./components/BusinessProfileWi
 export { default as DashboardView } from "./components/DashboardView";
 export { default as DocumentModal } from "./components/DocumentModal";
 
-// Matchmaking Components (US-05)
+// Matchmaking Components (US-05 / US-35)
 export { default as MatchmakingView } from "./components/MatchmakingView";
+export { default as PlatformDetailView } from "./components/PlatformDetailView";
 
 // Terms Components
 export { default as DisclaimerBanner } from "./components/DisclaimerBanner";

@@ -11,22 +11,24 @@ generator client {
 }
 
 // ==========================================
-// Domain Fitur: Autentikasi & Akun Pengguna (US-01 / US-24)
+// Domain Fitur: Autentikasi & Akun Pengguna (US-01 / US-24 / US-08)
 // ==========================================
 
 model User {
-  id                 String     @id @default(uuid())
-  nama               String
-  email              String     @unique
-  passwordHash       String     @map("password_hash")
-  emailTerverifikasi Boolean    @default(false) @map("email_terverifikasi")
-  dibuatPada         DateTime   @default(now()) @map("dibuat_pada")
-  updatedAt          DateTime   @updatedAt @map("updated_at")
+  id                   String     @id @default(uuid())
+  nama                 String
+  email                String     @unique
+  passwordHash         String     @map("password_hash")
+  emailTerverifikasi   Boolean    @default(false) @map("email_terverifikasi")
+  tingkatLayanan       String     @default("FREE") @map("tingkat_layanan") // FREE, PREMIUM, CONSULTING, FULL_SERVICE
+  tingkatDiperbaruiPada DateTime? @map("tingkat_diperbarui_pada")
+  dibuatPada           DateTime   @default(now()) @map("dibuat_pada")
+  updatedAt            DateTime   @updatedAt @map("updated_at")
 
-  emailOtps          EmailOtp[]
-  businessProfile    BusinessProfile?
-  documents          Document[]
-  consents           Consent[]
+  emailOtps            EmailOtp[]
+  businessProfile      BusinessProfile?
+  documents            Document[]
+  consents             Consent[]
 
   @@map("users")
 }
@@ -48,7 +50,7 @@ model EmailOtp {
 }
 
 // ==========================================
-// Domain Fitur: Profil Bisnis & Kebutuhan Dana (US-02 / F-02 / US-27)
+// Domain Fitur: Profil Bisnis & Kebutuhan Dana (US-02 / F-02 / US-27 / US-35)
 // ==========================================
 
 model BusinessProfile {
@@ -129,7 +131,7 @@ model Consent {
 }
 
 // ==========================================
-// Domain Fitur: Platform Matchmaking SCF (US-05 / F-06)
+// Domain Fitur: Platform Matchmaking SCF & Detail (US-05 / US-35 / F-06 / F-35)
 // ==========================================
 
 model Platform {
@@ -142,8 +144,12 @@ model Platform {
   jenisEfekDidukung  String            @map("jenis_efek_didukung")
   estimasiBiaya      Float             @map("estimasi_biaya")
   deskripsi          String?
+  profilSingkat      String?           @map("profil_singkat")
+  persyaratanUmum    String?           @map("persyaratan_umum")
+  tahapanProses      String?           @map("tahapan_proses")
   keunggulan         String?
   aktif              Boolean           @default(true)
+  diperbaruiPada     DateTime          @default(now()) @updatedAt @map("diperbarui_pada")
   dibuatPada         DateTime          @default(now()) @map("dibuat_pada")
 
   businessProfiles   BusinessProfile[]

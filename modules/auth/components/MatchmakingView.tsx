@@ -153,9 +153,13 @@ export default function MatchmakingView({
                       <span className="text-base font-black text-slate-400">
                         {item.peringkat}.
                       </span>
-                      <h3 className="text-lg font-black text-slate-900 tracking-tight">
-                        {item.nama}
-                      </h3>
+                      <Link
+                        href={`/platforms/${item.id}`}
+                        className="text-lg font-black text-slate-900 tracking-tight hover:text-[#5170FF] transition cursor-pointer flex items-center gap-1.5"
+                      >
+                        <span>{item.nama}</span>
+                        <span className="text-xs font-normal text-[#5170FF]">›</span>
+                      </Link>
                     </div>
 
                     {item.isPalingCocok && (
@@ -203,6 +207,17 @@ export default function MatchmakingView({
                       💡 {item.detailPlatform.keunggulan}
                     </div>
                   )}
+
+                  {/* Tombol Buka Detail (US-35 AC1) */}
+                  <div className="mt-4 pt-3 border-t border-slate-100 flex justify-end">
+                    <Link
+                      href={`/platforms/${item.id}`}
+                      className="inline-flex items-center gap-1.5 text-xs font-bold text-[#5170FF] hover:text-blue-700 transition"
+                    >
+                      <span>Lihat Persyaratan & Detail</span>
+                      <span>→</span>
+                    </Link>
+                  </div>
                 </div>
               ))}
             </div>
