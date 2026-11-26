@@ -1,11 +1,11 @@
 import React from "react";
 import { redirect } from "next/navigation";
 import { getSessionUser } from "@/modules/auth/utils/session";
-import { getMyBusinessProfileAction, DashboardView } from "@/modules/auth";
+import { getMyDashboardDataAction, DashboardView } from "@/modules/auth";
 
 export const metadata = {
-  title: "Dasbor UKM - SCOUT",
-  description: "Dasbor penerbit UKM untuk melacak kesiapan berkas dan status profil pendanaan SCF.",
+  title: "Dasbor Penerbit UKM - SCOUT",
+  description: "Dasbor penerbit UKM untuk melacak kesiapan berkas persyaratan dan status profil pendanaan SCF.",
 };
 
 export default async function DashboardPage() {
@@ -14,7 +14,19 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const profile = await getMyBusinessProfileAction();
+  const dashboardData = await getMyDashboardDataAction();
+  if (!dashboardData) {
+    redirect("/login");
+  }
 
-  return <DashboardView user={user} profile={profile} />;
+  return (
+    <DashboardView
+      user={user}
+      profile={dashboardData.profile}
+      aggregatedDocs={dashboardData.aggregatedDocs}
+      matchmaking={dashboardData.matchmaking}
+      metrics={dashboardData.metrics}
+      hasConsent={dashboardData.hasConsent}
+    />
+  );
 }

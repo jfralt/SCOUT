@@ -25,6 +25,8 @@ model User {
 
   emailOtps          EmailOtp[]
   businessProfile    BusinessProfile?
+  documents          Document[]
+  consents           Consent[]
 
   @@map("users")
 }
@@ -46,27 +48,105 @@ model EmailOtp {
 }
 
 // ==========================================
-// Domain Fitur: Profil Bisnis & Kebutuhan Dana (US-02 / F-02)
+// Domain Fitur: Profil Bisnis & Kebutuhan Dana (US-02 / F-02 / US-27)
 // ==========================================
 
 model BusinessProfile {
-  id                  String   @id @default(uuid())
-  userId              String   @unique @map("user_id")
-  namaBisnis          String   @default("") @map("nama_bisnis")
-  badanHukum          String   @map("badan_hukum")
-  sektor              String
-  kebutuhanDana       Float    @map("kebutuhan_dana")
-  kondisiDokumen      String   @map("kondisi_dokumen")
-  jangkaWaktuBulan    Int      @default(12) @map("jangka_waktu_bulan")
-  tujuanPendanaan     String   @default("Pengembangan Usaha") @map("tujuan_pendanaan")
-  rencanaPenggunaan   String   @default("") @map("rencana_penggunaan")
-  penjelasanPenggunaan String  @default("") @map("penjelasan_penggunaan")
-  dokumenPendukungUrl String?  @map("dokumen_pendukung_url")
-  statusDraf          Boolean  @default(false) @map("status_draf")
-  platformTujuanId    String?  @map("platform_tujuan_id")
-  diperbaruiPada      DateTime @default(now()) @updatedAt @map("diperbarui_pada")
+  id                   String    @id @default(uuid())
+  userId               String    @unique @map("user_id")
+  namaBisnis           String    @default("") @map("nama_bisnis")
+  badanHukum           String    @map("badan_hukum")
+  sektor               String
+  kebutuhanDana        Float     @map("kebutuhan_dana")
+  kondisiDokumen       String    @map("kondisi_dokumen")
+  jenisEfek            String?   @default("SAHAM") @map("jenis_efek")
+  jangkaWaktuBulan     Int       @default(12) @map("jangka_waktu_bulan")
+  tujuanPendanaan      String    @default("Pengembangan Usaha") @map("tujuan_pendanaan")
+  rencanaPenggunaan    String    @default("") @map("rencana_penggunaan")
+  penjelasanPenggunaan String    @default("") @map("penjelasan_penggunaan")
+  dokumenPendukungUrl  String?   @map("dokumen_pendukung_url")
+  statusDraf           Boolean   @default(false) @map("status_draf")
+  platformTujuanId     String?   @map("platform_tujuan_id")
+  diperbaruiPada       DateTime  @default(now()) @updatedAt @map("diperbarui_pada")
 
-  user                User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  platformTujuan       Platform? @relation(fields: [platformTujuanId], references: [id])
 
   @@map("business_profiles")
+}
+
+// ==========================================
+// Domain Fitur: Document Tracking & Persyaratan (US-03 / US-04)
+// ==========================================
+
+model DocumentRequirement {
+  id        String     @id @default(uuid())
+  kode      String     @unique
+  nama      String
+  kategori  String     // Legalitas, Keuangan, Operasional
+  deskripsi String
+  wajib     Boolean    @default(true)
+  urutan    Int        @default(0)
+
+  documents Document[]
+
+  @@map("document_requirements")
+}
+
+model Document {
+  id            String              @id @default(uuid())
+  userId        String              @map("user_id")
+  requirementId String              @map("requirement_id")
+  namaFile      String              @map("nama_file")
+  lokasiFile    String              @map("lokasi_file")
+  ukuranKb      Int                 @map("ukuran_kb")
+  status        String              @default("lengkap") // lengkap, perlu_revisi, valid
+  catatan       String?
+  diunggahPada  DateTime            @default(now()) @map("diunggah_pada")
+  diperbaruiPada DateTime           @default(now()) @updatedAt @map("diperbarui_pada")
+
+  user          User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  requirement   DocumentRequirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, requirementId])
+  @@map("documents")
+}
+
+// ==========================================
+// Domain Fitur: Kebijakan Privasi & Persetujuan (US-17 / US-04)
+// ==========================================
+
+model Consent {
+  id        String   @id @default(uuid())
+  userId    String   @map("user_id")
+  jenis     String   // pemrosesan_data_pribadi
+  disetujui Boolean  @default(false)
+  tanggal   DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("consents")
+}
+
+// ==========================================
+// Domain Fitur: Platform Matchmaking SCF (US-05 / F-06)
+// ==========================================
+
+model Platform {
+  id                 String            @id @default(uuid())
+  nama               String
+  fokusSektor        String            @map("fokus_sektor")
+  badanHukumDiterima String            @map("badan_hukum_diterima")
+  danaMinimum        Float             @map("dana_minimum")
+  danaMaksimum        Float             @map("dana_maksimum")
+  jenisEfekDidukung  String            @map("jenis_efek_didukung")
+  estimasiBiaya      Float             @map("estimasi_biaya")
+  deskripsi          String?
+  keunggulan         String?
+  aktif              Boolean           @default(true)
+  dibuatPada         DateTime          @default(now()) @map("dibuat_pada")
+
+  businessProfiles   BusinessProfile[]
+
+  @@map("platforms")
 }

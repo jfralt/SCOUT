@@ -54,7 +54,7 @@ export const otpVerificationSchema = z.object({
     .regex(/^\d{6}$/, "Kode OTP harus berupa 6 digit angka."),
 });
 
-// Skema Validasi Profil Bisnis & Kebutuhan Dana (US-02)
+// Skema Validasi Profil Bisnis & Kebutuhan Dana (US-02 / US-27)
 export const businessProfileSchema = z.object({
   nama_bisnis: z
     .string()
@@ -73,6 +73,10 @@ export const businessProfileSchema = z.object({
   kondisi_dokumen: z
     .string()
     .min(1, "Kondisi dokumen wajib dipilih."),
+  jenis_efek: z
+    .string()
+    .optional()
+    .default("SAHAM"),
   jangka_waktu_bulan: z
     .number()
     .default(12),
@@ -87,4 +91,8 @@ export const businessProfileSchema = z.object({
     .trim()
     .min(1, "Uraian rencana penggunaan dana wajib diisi.")
     .min(10, "Uraian rencana penggunaan minimal 10 karakter."),
+  dokumen_pendukung_url: z
+    .string()
+    .nullable()
+    .optional(),
 });

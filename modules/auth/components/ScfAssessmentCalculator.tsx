@@ -279,7 +279,7 @@ Cek kelayakan berkas Anda di SCOUT (Platform Pendamping SCF)`;
               {/* Checklist Singkat Dokumen */}
               <div className="space-y-2 mb-6">
                 <p className="text-xs font-bold text-slate-700">Checklist Berkas Pokok:</p>
-                {hasilEvaluasi.checklistDokumen.map((doc) => (
+                {hasilEvaluasi.checklistDokumen.map((doc: any) => (
                   <div key={doc.id} className="flex items-center justify-between text-xs py-1">
                     <span className="text-slate-600 truncate max-w-[200px]" title={doc.nama}>
                       {doc.nama}

@@ -1,7 +1,9 @@
 "use server";
 
 import crypto from "node:crypto";
-import { redirect } from "next/navigation";
+import fs from "node:fs";
+import path from "node:path";
+import { revalidatePath } from "next/cache";
 import { registerSchema, loginSchema, otpVerificationSchema, businessProfileSchema } from "./utils/validation";
 import { hashPassword, verifyPassword, hashOtp, verifyOtp } from "./utils/hash";
 import {
@@ -15,9 +17,28 @@ import {
   invalidateOtp,
   getBusinessProfileByUserId,
   saveBusinessProfile,
+  getUserConsent,
+  saveUserConsent,
+  getAllDocumentRequirements,
+  getUserDocuments,
+  getUserDocumentByRequirement,
+  saveUserDocument,
+  getAggregatedUserDocuments,
+  getAllPlatforms,
+  calculatePlatformMatchmaking,
+  computeDashboardMetrics,
 } from "./utils/db";
 import { setSessionCookie, clearSessionCookie, getSessionUser } from "./utils/session";
-import { AuthActionResult, UserProfile, BusinessProfileRecord, ProfileActionResult } from "./types";
+import {
+  AuthActionResult,
+  UserProfile,
+  BusinessProfileRecord,
+  ProfileActionResult,
+  DocumentActionResult,
+  DocumentWithRequirement,
+  MatchmakingPlatformResult,
+  DashboardMetric,
+} from "./types";
 
 /**
  * Helper untuk men-generate kode OTP 6-digit acak
@@ -149,17 +170,18 @@ export async function verifyOtpAction(
         message: "Batas 5 kali percobaan telah tercapai. Kode OTP ini tidak berlaku lagi. Silakan tekan Kirim Ulang untuk meminta kode baru.",
       };
     }
+    const remaining = 5 - attempts;
     return {
       success: false,
-      message: `Kode verifikasi salah (Percobaan ${attempts}/5). Periksa kembali 6 digit kode Anda.`,
+      message: `Kode verifikasi salah. Sisa kesempatan mencoba: ${remaining} kali.`,
     };
   }
 
-  // Tandai OTP digunakan dan verifikasi status email user
+  // Tandai OTP digunakan dan set email terverifikasi (US-01 AC4, US-24 AC2 & AC5)
   markOtpAsUsed(latestOtp.id);
   setUserEmailVerified(user.id);
 
-  // Buat sesi login aktif untuk pengguna
+  // Buat sesi login otomatis
   await setSessionCookie({
     id: user.id,
     nama: user.nama,
@@ -169,51 +191,43 @@ export async function verifyOtpAction(
 
   return {
     success: true,
-    message: "Verifikasi berhasil!",
+    message: "Email berhasil diverifikasi! Mengalihkan ke dasbor...",
     data: {
-      redirectTo: "/",
+      email: user.email,
+      redirectTo: "/dashboard",
     },
   };
 }
 
 /**
- * Server Action: Kirim Ulang Kode OTP (J9)
+ * Server Action: Kirim Ulang Kode OTP (US-24 AC6 / W-VE.3)
  */
 export async function resendOtpAction(email: string): Promise<AuthActionResult> {
-  if (!email || !email.includes("@")) {
-    return {
-      success: false,
-      message: "Alamat email tidak valid.",
-    };
-  }
-
   const user = findUserByEmail(email);
   if (!user) {
     return {
       success: false,
-      message: "Pengguna tidak ditemukan.",
+      message: "Pengguna dengan email ini tidak ditemukan.",
     };
   }
 
-  // Generate kode OTP baru
   const rawOtp = generateSixDigitOtp();
   const otpHash = hashOtp(rawOtp);
   createEmailOtp(user.id, otpHash, 10);
 
-  console.log(`[SCOUT DEV EMAIL RESEND] Kode verifikasi OTP baru untuk ${email}: ${rawOtp}`);
+  console.log(`[SCOUT DEV EMAIL RESEND] Kode OTP baru untuk ${email}: ${rawOtp}`);
 
   return {
     success: true,
-    message: "Kode verifikasi baru telah dikirimkan ke email Anda.",
+    message: "Kode verifikasi OTP baru telah dikirimkan ke email Anda.",
     data: {
-      email,
       otpDebug: process.env.NODE_ENV !== "production" ? rawOtp : undefined,
     },
   };
 }
 
 /**
- * Server Action: Login Pengguna (US-01 / W-04 / W-05)
+ * Server Action: Masuk Akun / Login (US-01 / W-04)
  */
 export async function loginAction(
   prevState: AuthActionResult | null,
@@ -228,19 +242,18 @@ export async function loginAction(
   if (!validationResult.success) {
     return {
       success: false,
-      message: "Email atau kata sandi tidak valid.",
+      message: "Format email atau kata sandi tidak valid.",
       errors: validationResult.error.flatten().fieldErrors,
     };
   }
 
   const { email, password } = validationResult.data;
-
-  // AC3 & AC4: Validasi kredensial pengguna
   const user = findUserByEmail(email);
+
   if (!user) {
     return {
       success: false,
-      message: "Email atau kata sandi tidak valid.",
+      message: "Email atau kata sandi yang Anda masukkan salah.",
     };
   }
 
@@ -248,52 +261,35 @@ export async function loginAction(
   if (!isPasswordValid) {
     return {
       success: false,
-      message: "Email atau kata sandi tidak valid.",
+      message: "Email atau kata sandi yang Anda masukkan salah.",
     };
   }
 
-  // Jika akun belum diverifikasi, arahkan ke verifikasi OTP
-  if (!user.email_terverifikasi) {
-    // Generate kode baru agar pengguna langsung bisa verifikasi
-    const rawOtp = generateSixDigitOtp();
-    const otpHash = hashOtp(rawOtp);
-    createEmailOtp(user.id, otpHash, 10);
-    console.log(`[SCOUT DEV EMAIL UNVERIFIED LOGIN] OTP untuk ${email}: ${rawOtp}`);
+  const isVerified = user.email_terverifikasi === 1 || user.email_terverifikasi === true;
 
-    return {
-      success: true,
-      message: "Email Anda belum diverifikasi. Silakan masukkan kode OTP.",
-      data: {
-        email: user.email,
-        redirectTo: `/verify-otp?email=${encodeURIComponent(user.email)}`,
-        otpDebug: process.env.NODE_ENV !== "production" ? rawOtp : undefined,
-      },
-    };
-  }
-
-  // Buat sesi login
   await setSessionCookie({
     id: user.id,
     nama: user.nama,
     email: user.email,
-    email_terverifikasi: true,
+    email_terverifikasi: isVerified,
   });
 
   return {
     success: true,
-    message: "Login berhasil!",
+    message: "Berhasil masuk ke akun SCOUT.",
     data: {
-      redirectTo: "/",
+      redirectTo: "/dashboard",
     },
   };
 }
 
 /**
- * Server Action: Logout
+ * Server Action: Keluar Akun / Logout
  */
 export async function logoutAction(): Promise<void> {
   await clearSessionCookie();
-  redirect("/");
+  revalidatePath("/");
+  return;
 }
 
 /**
@@ -313,7 +309,7 @@ export async function getMyBusinessProfileAction(): Promise<BusinessProfileRecor
 }
 
 /**
- * Server Action: Simpan profil bisnis & target pendanaan (US-02)
+ * Server Action: Simpan profil bisnis & target pendanaan (US-02 / US-27)
  */
 export async function saveBusinessProfileAction(
   prevState: ProfileActionResult | null,
@@ -338,6 +334,7 @@ export async function saveBusinessProfileAction(
     sektor: formData.get("sektor")?.toString() || "",
     kebutuhan_dana: kebutuhanDanaNum,
     kondisi_dokumen: formData.get("kondisi_dokumen")?.toString() || "",
+    jenis_efek: formData.get("jenis_efek")?.toString() || "SAHAM",
     jangka_waktu_bulan: Number(formData.get("jangka_waktu_bulan") || 12),
     tujuan_pendanaan: formData.get("tujuan_pendanaan")?.toString() || "Pengembangan Usaha",
     rencana_penggunaan: formData.get("rencana_penggunaan")?.toString() || "",
@@ -366,9 +363,224 @@ export async function saveBusinessProfileAction(
   }
 
   const saved = saveBusinessProfile(user.id, validation.data, false);
+  revalidatePath("/dashboard");
+  revalidatePath("/matchmaking");
+
   return {
     success: true,
     message: "Profil bisnis dan target kebutuhan dana berhasil disimpan!",
     data: { ...saved, isDraft: false },
+  };
+}
+
+/**
+ * Server Action: Berikan Persetujuan Kebijakan Privasi (US-17 / US-04 AC2)
+ */
+export async function giveConsentAction(jenis: string = "pemrosesan_data_pribadi"): Promise<{ success: boolean; message?: string }> {
+  const user = await getSessionUser();
+  if (!user) {
+    return { success: false, message: "Sesi Anda telah berakhir. Silakan login kembali." };
+  }
+
+  saveUserConsent(user.id, jenis, true);
+  revalidatePath("/dashboard");
+  return { success: true, message: "Persetujuan kebijakan privasi berhasil disimpan." };
+}
+
+/**
+ * Server Action: Unggah atau Ganti Dokumen Persyaratan (US-04 / W-04.4 - W-04.10)
+ */
+export async function uploadDocumentAction(
+  prevState: DocumentActionResult | null,
+  formData: FormData
+): Promise<DocumentActionResult> {
+  const user = await getSessionUser();
+  if (!user) {
+    return {
+      success: false,
+      message: "Sesi Anda telah berakhir. Silakan login kembali.",
+    };
+  }
+
+  // US-04 AC1: Email wajib terverifikasi
+  if (!user.email_terverifikasi) {
+    return {
+      success: false,
+      message: "Unggahan ditolak. Alamat email Anda belum terverifikasi. Silakan lakukan verifikasi OTP terlebih dahulu.",
+    };
+  }
+
+  // US-04 AC2: Cek persetujuan privasi/pemrosesan data pribadi
+  const hasConsent = getUserConsent(user.id, "pemrosesan_data_pribadi");
+  if (!hasConsent) {
+    return {
+      success: false,
+      message: "CONSENT_REQUIRED",
+    };
+  }
+
+  const requirementId = formData.get("requirementId")?.toString();
+  const file = formData.get("file") as File | null;
+
+  if (!requirementId) {
+    return {
+      success: false,
+      message: "Persyaratan dokumen tidak valid.",
+    };
+  }
+
+  if (!file || typeof file === "string" || file.size === 0) {
+    return {
+      success: false,
+      message: "Pilih file yang ingin diunggah terlebih dahulu.",
+    };
+  }
+
+  // US-04 AC4 & W-04.6: Validasi format (PDF, JPG, PNG) & ukuran maksimal 5 MB (5 * 1024 * 1024)
+  const fileName = file.name;
+  const ext = path.extname(fileName).toLowerCase();
+  const allowedExts = [".pdf", ".jpg", ".jpeg", ".png"];
+
+  if (!allowedExts.includes(ext)) {
+    return {
+      success: false,
+      message: "Format file tidak didukung. Gunakan PDF, JPG, atau PNG.",
+    };
+  }
+
+  const maxSizeBytes = 5 * 1024 * 1024; // 5 MB
+  if (file.size > maxSizeBytes) {
+    return {
+      success: false,
+      message: "Ukuran file melebihi 5 MB. Pilih file yang lebih kecil.",
+    };
+  }
+
+  const ukuranKb = Math.round(file.size / 1024);
+
+  // Simpan file ke direktori uploads
+  try {
+    const uploadDir = path.resolve(process.cwd(), "public", "uploads");
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+
+    const safeFileName = `${user.id}_${Date.now()}_${fileName.replace(/[^a-zA-Z0-9.-]/g, "_")}`;
+    const filePath = path.join(uploadDir, safeFileName);
+    const bytes = await file.arrayBuffer();
+    const buffer = Buffer.from(bytes);
+    fs.writeFileSync(filePath, buffer);
+
+    const lokasiFile = `/uploads/${safeFileName}`;
+
+    // US-04 AC3 & AC6: Simpan dokumen atau ganti file lama, status menjadi lengkap
+    const doc = saveUserDocument(
+      user.id,
+      requirementId,
+      fileName,
+      lokasiFile,
+      ukuranKb,
+      "lengkap",
+      "Dokumen berhasil diunggah dan sedang dalam antrean kurasi."
+    );
+
+    revalidatePath("/dashboard");
+
+    return {
+      success: true,
+      message: `Dokumen "${fileName}" berhasil diunggah!`,
+      data: doc,
+    };
+  } catch (error) {
+    console.error("Error saving uploaded file:", error);
+    return {
+      success: false,
+      message: "Terjadi kesalahan pada sistem saat menyimpan berkas. Silakan coba lagi.",
+    };
+  }
+}
+
+/**
+ * Server Action: Perbarui Status Kurasi Dokumen (untuk simulasi peninjauan/kurasi)
+ */
+export async function updateDocumentStatusAction(
+  documentId: string,
+  newStatus: "lengkap" | "perlu_revisi" | "valid",
+  catatan?: string
+): Promise<{ success: boolean; message: string }> {
+  const user = await getSessionUser();
+  if (!user) {
+    return { success: false, message: "Akses ditolak." };
+  }
+
+  const db = (await import("./utils/db")).getDatabase();
+  const now = new Date().toISOString();
+  db.prepare(`
+    UPDATE documents 
+    SET status = ?, catatan = ?, diperbarui_pada = ? 
+    WHERE id = ? AND user_id = ?
+  `).run(newStatus, catatan || null, now, documentId, user.id);
+
+  revalidatePath("/dashboard");
+  return { success: true, message: "Status kurasi berhasil diperbarui." };
+}
+
+/**
+ * Server Action: Ambil data agregasi dashboard secara lengkap
+ */
+export async function getMyDashboardDataAction(): Promise<{
+  profile: BusinessProfileRecord | null;
+  aggregatedDocs: DocumentWithRequirement[];
+  matchmaking: MatchmakingPlatformResult[];
+  metrics: DashboardMetric;
+  hasConsent: boolean;
+} | null> {
+  const user = await getSessionUser();
+  if (!user) return null;
+
+  const profile = getBusinessProfileByUserId(user.id);
+  const aggregatedDocs = getAggregatedUserDocuments(user.id);
+  const matchmaking = calculatePlatformMatchmaking(profile);
+  const metrics = computeDashboardMetrics(profile, aggregatedDocs, matchmaking);
+  const hasConsent = getUserConsent(user.id, "pemrosesan_data_pribadi");
+
+  return {
+    profile,
+    aggregatedDocs,
+    matchmaking,
+    metrics,
+    hasConsent,
+  };
+}
+
+/**
+ * Server Action: Ambil data hasil kecocokan penyelenggara SCF (US-05)
+ */
+export async function getMyMatchmakingAction(): Promise<{
+  isProfileComplete: boolean;
+  profile: BusinessProfileRecord | null;
+  matchmaking: MatchmakingPlatformResult[];
+} | null> {
+  const user = await getSessionUser();
+  if (!user) return null;
+
+  const profile = getBusinessProfileByUserId(user.id);
+
+  // Aturan database-us-05: Keputusan "Profil sudah lengkap?" benar bila
+  // badan_hukum, sektor, kebutuhan_dana, dan kondisi_dokumen terisi (AC4)
+  const isProfileComplete = Boolean(
+    profile &&
+    profile.badan_hukum &&
+    profile.sektor &&
+    profile.kebutuhan_dana > 0 &&
+    profile.kondisi_dokumen
+  );
+
+  const matchmaking = isProfileComplete ? calculatePlatformMatchmaking(profile) : [];
+
+  return {
+    isProfileComplete,
+    profile,
+    matchmaking,
   };
 }

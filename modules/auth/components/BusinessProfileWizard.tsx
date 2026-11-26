@@ -25,6 +25,7 @@ export default function BusinessProfileWizard({ initialData }: Props) {
     initialData?.kebutuhan_dana ? initialData.kebutuhan_dana.toLocaleString("id-ID") : "100.000.000"
   );
   const [kebutuhanDanaRaw, setKebutuhanDanaRaw] = useState(initialData?.kebutuhan_dana || 100000000);
+  const [jenisEfek, setJenisEfek] = useState(initialData?.jenis_efek || "SAHAM");
   const [jangkaWaktu, setJangkaWaktu] = useState(initialData?.jangka_waktu_bulan || 12);
   const [tujuanPendanaan, setTujuanPendanaan] = useState(initialData?.tujuan_pendanaan || "Pengembangan Usaha");
   const [rencanaPenggunaan, setRencanaPenggunaan] = useState(initialData?.rencana_penggunaan || "Ekspansi Gerai & Cabang");
@@ -131,6 +132,7 @@ export default function BusinessProfileWizard({ initialData }: Props) {
         <form action={formAction} noValidate>
           <input type="hidden" name="action_type" value={actionType} />
           <input type="hidden" name="kebutuhan_dana" value={kebutuhanDanaRaw} />
+          <input type="hidden" name="jenis_efek" value={jenisEfek} />
           <input type="hidden" name="tujuan_pendanaan" value={tujuanPendanaan} />
           <input type="hidden" name="dokumen_pendukung_name" value={dokumenName} />
 
@@ -345,6 +347,22 @@ export default function BusinessProfileWizard({ initialData }: Props) {
 
                 {/* Right Column */}
                 <div className="space-y-5">
+                  {/* Jenis Instrumen Efek (US-27) */}
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-2">
+                      Rencana Instrumen Efek (US-27) *
+                    </label>
+                    <select
+                      value={jenisEfek}
+                      onChange={(e) => setJenisEfek(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-300 text-xs sm:text-sm focus:outline-none focus:border-[#5170FF] bg-white cursor-pointer"
+                    >
+                      <option value="SAHAM">Saham Ekuitas (Kepemilikan Saham UKM)</option>
+                      <option value="SUKUK">Sukuk Syariah (Akad Mudharabah / Musyarakah)</option>
+                      <option value="OBLIGASI">Obligasi / Efek Utang Bagi Hasil</option>
+                    </select>
+                  </div>
+
                   {/* Jangka Waktu Pendanaan */}
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-2">

@@ -2,31 +2,53 @@
 
 import React, { useState, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { resendOtpAction, logoutAction } from "@/modules/auth/actions";
 import DisclaimerBanner from "./DisclaimerBanner";
-import { BusinessProfileRecord } from "../types";
+import DocumentModal from "./DocumentModal";
+import {
+  UserProfile,
+  BusinessProfileRecord,
+  DocumentWithRequirement,
+  MatchmakingPlatformResult,
+  DashboardMetric,
+} from "../types";
 
 interface Props {
-  user: {
-    id: string;
-    nama: string;
-    email: string;
-    email_terverifikasi: boolean;
-  };
+  user: UserProfile;
   profile: BusinessProfileRecord | null;
+  aggregatedDocs: DocumentWithRequirement[];
+  matchmaking: MatchmakingPlatformResult[];
+  metrics: DashboardMetric;
+  hasConsent: boolean;
 }
 
-export default function DashboardView({ user, profile }: Props) {
+export default function DashboardView({
+  user,
+  profile,
+  aggregatedDocs: initialDocs,
+  matchmaking,
+  metrics: initialMetrics,
+  hasConsent: initialConsent,
+}: Props) {
+  const router = useRouter();
+  const [activeTab, setActiveTab] = useState<"semua" | "revisi" | "valid">("semua");
+  const [selectedDoc, setSelectedDoc] = useState<DocumentWithRequirement | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [hasConsent, setHasConsent] = useState<boolean>(initialConsent);
   const [isResending, startResend] = useTransition();
   const [resendStatus, setResendStatus] = useState<string | null>(null);
   const [devOtp, setDevOtp] = useState<string | null>(null);
-  const [showUploadDeniedModal, setShowUploadDeniedModal] = useState<boolean>(false);
+
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const pageSize = 5;
 
   const handleResendOtp = () => {
     startResend(async () => {
       const result = await resendOtpAction(user.email);
       if (result.success) {
-        setResendStatus("Kode verifikasi OTP baru telah dikirimkan ke email Anda.");
+        setResendStatus("Kode OTP baru telah dikirimkan ke email Anda.");
         if (result.data?.otpDebug) {
           setDevOtp(result.data.otpDebug);
         }
@@ -36,39 +58,70 @@ export default function DashboardView({ user, profile }: Props) {
     });
   };
 
-  const handleUploadClick = () => {
-    // US-24 AC8 / W-VE.5: Unggahan ditolak bila email belum diverifikasi
-    if (!user.email_terverifikasi) {
-      setShowUploadDeniedModal(true);
-    } else {
-      alert("Fitur unggah dokumen akan aktif pada modul Document Tracking (US-04).");
-    }
+  const handleOpenDetail = (doc: DocumentWithRequirement) => {
+    setSelectedDoc(doc);
+    setIsModalOpen(true);
   };
 
+  // Filtered documents based on active tab
+  const filteredDocs = initialDocs.filter((doc) => {
+    if (activeTab === "revisi") return doc.statusKurasi === "Perlu Revisi" || !doc.uploaded;
+    if (activeTab === "valid") return doc.statusKurasi === "Lengkap & Valid";
+    return true; // "semua"
+  });
+
+  const totalPages = Math.ceil(filteredDocs.length / pageSize) || 1;
+  const paginatedDocs = filteredDocs.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  // Format Nilai Mata Uang
+  const kebutuhanDanaDisplay = profile?.kebutuhan_dana
+    ? `Rp ${profile.kebutuhan_dana.toLocaleString("id-ID")}`
+    : "Rp 2.500.000.000";
+
+  const namaBisnisDisplay = profile?.nama_bisnis || "PT Kopi Nusantara Sejahtera";
+  const sektorDisplay = profile?.sektor || "F&B";
+  const badanHukumDisplay = profile?.badan_hukum || "PT";
+  const instrumenDisplay = profile?.jenis_efek || "Saham Ekuitas";
+
   return (
-    <div className="min-h-screen bg-[#F8FAFC] pb-16">
-      {/* Header Dasbor */}
-      <header className="border-b border-slate-200/80 bg-white sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex items-center justify-between">
-          <Link href="/dashboard" className="flex items-center gap-3">
-            <img src="/logo.png" alt="SCOUT Logo" className="h-8 w-auto object-contain" />
-            <span className="hidden sm:inline-block border-l border-slate-200 pl-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-              Dasbor Penerbit UKM
-            </span>
-          </Link>
+    <div className="min-h-screen bg-[#F0F4FA] text-slate-800 font-sans pb-16">
+      
+      {/* Top Navbar: scout | SCF ACCELERATOR */}
+      <header className="border-b border-slate-200/90 bg-white sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex items-center justify-between">
+          
+          {/* Logo & Brand */}
+          <div className="flex items-center gap-6">
+            <Link href="/" className="flex items-center gap-3">
+              <span className="text-2xl font-black text-[#5170FF] tracking-tight">scout</span>
+              <span className="text-slate-300">|</span>
+              <span className="text-[11px] font-bold text-slate-400 tracking-wider uppercase">
+                SCF ACCELERATOR
+              </span>
+            </Link>
+
+            {/* Nav links */}
+            <nav className="hidden md:flex items-center gap-6 text-xs font-semibold text-slate-600">
+              <Link href="/#features" className="hover:text-[#5170FF] transition">Pilar Fitur</Link>
+              <Link href="/#calculator" className="hover:text-[#5170FF] transition">Kalkulator Diagnosa</Link>
+              <Link href="/dashboard" className="text-[#5170FF] font-bold">Dasbor Demo</Link>
+              <Link href="/#how-it-works" className="hover:text-[#5170FF] transition">Cara Kerja</Link>
+              <Link href="/matchmaking" className="hover:text-[#5170FF] transition font-bold text-indigo-600">
+                Kecocokan SCF
+              </Link>
+            </nav>
+          </div>
+
+          {/* User Profile & Logout */}
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
-              <span
-                className={`h-2 w-2 rounded-full ${
-                  user.email_terverifikasi ? "bg-emerald-500" : "bg-amber-400"
-                }`}
-              />
-              <span className="font-bold text-slate-800">{user.nama}</span>
+            <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-50 border border-slate-200 text-xs font-medium text-slate-700">
+              <span className={`h-2 w-2 rounded-full ${user.email_terverifikasi ? "bg-emerald-500" : "bg-amber-400"}`} />
+              <span className="font-semibold truncate max-w-[150px]">{user.nama}</span>
             </div>
             <form action={logoutAction}>
               <button
                 type="submit"
-                className="px-3.5 py-1.5 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:text-rose-600 hover:bg-slate-50 transition cursor-pointer"
+                className="px-3.5 py-1.5 rounded-xl border border-rose-200 text-xs font-semibold text-rose-600 hover:bg-rose-50 transition cursor-pointer"
               >
                 Keluar
               </button>
@@ -77,226 +130,367 @@ export default function DashboardView({ user, profile }: Props) {
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 space-y-8">
+      {/* Main Container */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 space-y-6">
         
-        {/* Banner W-VE.1: Pengingat Email Belum Terverifikasi (US-24 AC7) */}
+        {/* Banner W-VE.1: Verifikasi OTP Alert jika belum terverifikasi */}
         {!user.email_terverifikasi && (
-          <div className="rounded-2xl border-2 border-rose-300 bg-rose-50/80 p-5 sm:p-6 text-slate-800 shadow-xs">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 text-rose-700 font-bold text-sm">
-                  <svg className="w-5 h-5 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <span>(!) Alamat Email Belum Terverifikasi</span>
+          <div className="rounded-2xl border border-rose-300 bg-rose-50 p-4 text-slate-800 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-rose-700 font-bold text-xs">
+                <span>(!)</span>
+                <span>Alamat Email Belum Terverifikasi</span>
+              </div>
+              <p className="text-xs text-slate-600">
+                Kode verifikasi OTP telah dikirimkan ke <strong>{user.email}</strong>. Verifikasi email Anda untuk dapat mengunggah berkas persyaratan.
+              </p>
+              {resendStatus && (
+                <p className="text-xs font-semibold text-[#5170FF] pt-0.5">{resendStatus}</p>
+              )}
+              {devOtp && (
+                <div className="inline-flex items-center gap-2 bg-white px-2 py-0.5 rounded border border-amber-300 text-xs text-amber-800">
+                  <span>OTP Dev:</span>
+                  <span className="font-mono font-bold">{devOtp}</span>
                 </div>
-                <p className="text-xs text-slate-600 leading-relaxed max-w-2xl">
-                  Kami telah mengirimkan kode verifikasi OTP ke <strong>{user.email}</strong>. Verifikasi email Anda sekarang agar Anda dapat mengunggah dokumen legalitas dan mengajukan kurasi pendanaan.
-                </p>
-                {resendStatus && (
-                  <p className="text-xs font-semibold text-[#5170FF] pt-1">
-                    {resendStatus}
-                  </p>
-                )}
-                {devOtp && (
-                  <div className="inline-flex items-center gap-2 bg-white px-2.5 py-1 rounded-lg border border-amber-300 text-xs text-amber-800 mt-2">
-                    <span className="font-semibold">Kode OTP Dev:</span>
-                    <span className="font-mono font-bold text-sm">{devOtp}</span>
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center gap-3 shrink-0">
-                <button
-                  type="button"
-                  onClick={handleResendOtp}
-                  disabled={isResending}
-                  className="px-4 py-2 rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
-                >
-                  {isResending ? "Mengirim..." : "Kirim Ulang Kode OTP"}
-                </button>
-                <Link
-                  href={`/verify-otp?email=${encodeURIComponent(user.email)}`}
-                  className="px-4 py-2 rounded-xl bg-[#0D2063] hover:bg-[#081545] text-white text-xs font-semibold transition cursor-pointer shadow-xs"
-                >
-                  Masukkan Kode OTP →
-                </Link>
-              </div>
+              )}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={handleResendOtp}
+                disabled={isResending}
+                className="px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 transition cursor-pointer"
+              >
+                {isResending ? "Mengirim..." : "Kirim Ulang"}
+              </button>
+              <Link
+                href={`/verify-otp?email=${encodeURIComponent(user.email)}`}
+                className="px-3 py-1.5 rounded-lg bg-[#5170FF] text-white text-xs font-bold hover:bg-blue-600 transition"
+              >
+                Verifikasi OTP →
+              </Link>
             </div>
           </div>
         )}
 
-        {/* Greeting Banner */}
-        <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-          <div>
-            <span className="text-xs font-semibold text-[#5170FF] tracking-wide uppercase">
-              Selamat datang kembali,
-            </span>
-            <h1 className="text-2xl sm:text-3xl font-black text-black tracking-tight mt-1">
-              {user.nama}
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-500 mt-1 max-w-xl">
-              Kelola profil bisnis dan pantau kesiapan penggalangan dana UKM Anda melalui skema Securities Crowdfunding.
-            </p>
+        {/* 1. Profile Summary Card (Desain Persis Mockup) */}
+        <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200/90 shadow-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+          
+          {/* Left: PT Icon & Business Info */}
+          <div className="flex items-start sm:items-center gap-4">
+            <div className="w-13 h-13 rounded-2xl bg-[#4D6EF7] text-white flex items-center justify-center font-bold text-lg shadow-sm shrink-0">
+              {badanHukumDisplay.slice(0, 2)}
+            </div>
+            <div>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                  {namaBisnisDisplay}
+                </h1>
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-[#5170FF] border border-blue-200/60">
+                  Sektor: {sektorDisplay}
+                </span>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-slate-500 font-medium mt-1.5 flex-wrap">
+                <span>Target: {kebutuhanDanaDisplay}</span>
+                <span>•</span>
+                <span>Instrumen: {instrumenDisplay}</span>
+                <span>•</span>
+                <span>Tahap: Audit Diagnosa</span>
+                <Link
+                  href="/profile"
+                  className="ml-2 text-xs font-bold text-[#5170FF] hover:underline"
+                >
+                  [Ubah Profil]
+                </Link>
+              </div>
+            </div>
           </div>
-          <div className="flex items-center gap-3">
+
+          {/* Right: SCF READINESS SCORE & STATUS KELAYAKAN */}
+          <div className="flex items-center gap-6 sm:gap-8 border-t md:border-t-0 md:border-l border-slate-200/80 pt-4 md:pt-0 md:pl-8 self-stretch md:self-auto justify-between md:justify-end">
+            <div className="text-right">
+              <span className="block text-[10px] font-bold text-slate-400 tracking-wider uppercase">
+                SCF READINESS SCORE
+              </span>
+              <div className="flex items-baseline justify-end gap-1 mt-0.5">
+                <span className="text-3xl font-black text-slate-900 tracking-tight">
+                  {initialMetrics.overallScore}
+                </span>
+                <span className="text-xs font-bold text-slate-400">/100</span>
+              </div>
+            </div>
+
+            <div>
+              <span className="block text-[10px] font-bold text-slate-400 tracking-wider uppercase mb-1">
+                STATUS KELAYAKAN
+              </span>
+              <span className="inline-block px-3.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-600 border border-emerald-300">
+                {initialMetrics.statusKelayakan}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* 2. Empat Kartu Statistik (4 Stat Cards persis Mockup) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          
+          {/* Card 1: Dokumen Lengkap & Valid */}
+          <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-xs flex flex-col justify-between">
+            <span className="text-xs font-medium text-slate-500">
+              Dokumen Lengkap & Valid
+            </span>
+            <div className="mt-2 mb-1">
+              <span className="text-2xl font-black text-teal-600">
+                {initialMetrics.dokumenLengkap}
+              </span>
+              <span className="text-xs font-medium text-slate-600 ml-1.5">
+                dari {initialMetrics.totalDokumen} berkas
+              </span>
+            </div>
+            <span className="text-[11px] font-semibold text-emerald-600 flex items-center gap-1">
+              <span>✓</span> Memenuhi syarat legal
+            </span>
+          </div>
+
+          {/* Card 2: Dokumen Butuh Revisi */}
+          <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-xs flex flex-col justify-between">
+            <span className="text-xs font-medium text-slate-500">
+              Dokumen Butuh Revisi
+            </span>
+            <div className="mt-2 mb-1">
+              <span className="text-2xl font-black text-amber-500">
+                {initialMetrics.dokumenRevisi}
+              </span>
+              <span className="text-xs font-medium text-slate-600 ml-1.5">
+                berkas
+              </span>
+            </div>
+            <span className="text-[11px] font-semibold text-amber-600">
+              Perlu rincian catatan
+            </span>
+          </div>
+
+          {/* Card 3: Platform Mitra Cocok */}
+          <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-xs flex flex-col justify-between">
+            <span className="text-xs font-medium text-slate-500">
+              Platform Mitra Cocok
+            </span>
+            <div className="mt-2 mb-1">
+              <span className="text-2xl font-black text-indigo-600">
+                {initialMetrics.platformCocokCount}
+              </span>
+              <span className="text-xs font-medium text-slate-600 ml-1.5">
+                penyelenggara
+              </span>
+            </div>
             <Link
-              href="/profile"
-              className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-[#5170FF] hover:bg-[#3f5fe8] text-white text-xs font-bold transition shadow-xs"
+              href="/matchmaking"
+              className="text-[11px] font-semibold text-indigo-600 hover:underline flex items-center justify-between"
             >
-              <span>{profile ? "Perbarui Profil Bisnis" : "Isi Profil Bisnis Sekarang"}</span>
+              <span>Match rate s.d. {initialMetrics.topMatchRate}%</span>
               <span>→</span>
             </Link>
           </div>
+
+          {/* Card 4: Estimasi Waktu Siap */}
+          <div className="bg-white rounded-2xl p-5 border border-slate-200/90 shadow-xs flex flex-col justify-between">
+            <span className="text-xs font-medium text-slate-500">
+              Estimasi Waktu Siap
+            </span>
+            <div className="mt-2 mb-1">
+              <span className="text-2xl font-black text-amber-600">
+                2
+              </span>
+              <span className="text-xs font-medium text-slate-600 ml-1.5">
+                minggu
+              </span>
+            </div>
+            <span className="text-[11px] font-semibold text-slate-500">
+              Setelah Revisi Laporan
+            </span>
+          </div>
         </div>
 
-        {/* Cards Grid: W-06 (Profil UKM & Dokumen Saya) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* 3. Document Tracking Card: Tabs & Table */}
+        <div className="bg-white rounded-3xl border border-slate-200/90 shadow-sm overflow-hidden">
           
-          {/* Card Profil UKM */}
-          <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200/90 shadow-xs flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                  Profil Usaha UKM
-                </span>
-                <span
-                  className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${
-                    profile
-                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                      : "bg-amber-50 text-amber-700 border border-amber-200"
-                  }`}
-                >
-                  {profile ? "Profil Terisi" : "Belum Lengkap"}
-                </span>
-              </div>
-              
-              {profile ? (
-                <div className="space-y-3 text-xs sm:text-sm">
-                  <h3 className="text-lg font-bold text-black">
-                    {profile.nama_bisnis || "Bisnis UKM Anda"}
-                  </h3>
-                  <div className="grid grid-cols-2 gap-2 text-slate-600 bg-slate-50 p-3.5 rounded-xl border border-slate-100">
-                    <div>
-                      <span className="text-slate-400 text-xs block">Badan Hukum:</span>
-                      <span className="font-semibold text-slate-800">{profile.badan_hukum}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 text-xs block">Sektor Industri:</span>
-                      <span className="font-semibold text-slate-800">{profile.sektor}</span>
-                    </div>
-                    <div className="mt-1">
-                      <span className="text-slate-400 text-xs block">Target Kebutuhan Dana:</span>
-                      <span className="font-bold text-[#5170FF]">
-                        Rp {profile.kebutuhan_dana.toLocaleString("id-ID")}
-                      </span>
-                    </div>
-                    <div className="mt-1">
-                      <span className="text-slate-400 text-xs block">Kondisi Dokumen:</span>
-                      <span className="font-semibold text-slate-800 truncate block">
-                        {profile.kondisi_dokumen}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-2 py-4">
-                  <h3 className="text-base font-bold text-slate-800">
-                    Profil Bisnis Belum Dilengkapi
-                  </h3>
-                  <p className="text-xs text-slate-500 leading-relaxed">
-                    Isi data badan hukum dan target pendanaan agar SCOUT dapat menyesuaikan checklist dokumen dan mencocokkan Anda dengan platform SCF.
-                  </p>
-                </div>
+          {/* Tabs Filter Header */}
+          <div className="px-6 pt-5 pb-3 border-b border-slate-100 flex items-center gap-6">
+            <button
+              onClick={() => { setActiveTab("semua"); setCurrentPage(1); }}
+              className={`text-xs font-bold pb-2 transition relative cursor-pointer ${
+                activeTab === "semua"
+                  ? "text-[#5170FF]"
+                  : "text-slate-500 hover:text-slate-900"
+              }`}
+            >
+              Semua Berkas ({initialDocs.length})
+              {activeTab === "semua" && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#5170FF] rounded-full" />
               )}
-            </div>
+            </button>
 
-            <div className="pt-6 mt-4 border-t border-slate-100">
-              <Link
-                href="/profile"
-                className="w-full inline-flex items-center justify-center py-2.5 px-4 rounded-xl border border-slate-200 hover:border-slate-300 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition"
-              >
-                {profile ? "Ubah Data Profil" : "Lengkapi Profil Sekarang"}
-              </Link>
-            </div>
+            <button
+              onClick={() => { setActiveTab("revisi"); setCurrentPage(1); }}
+              className={`text-xs font-bold pb-2 transition relative cursor-pointer ${
+                activeTab === "revisi"
+                  ? "text-[#5170FF]"
+                  : "text-slate-500 hover:text-slate-900"
+              }`}
+            >
+              Perlu Perhatian ({initialMetrics.dokumenRevisi + initialMetrics.dokumenKosong})
+              {activeTab === "revisi" && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#5170FF] rounded-full" />
+              )}
+            </button>
+
+            <button
+              onClick={() => { setActiveTab("valid"); setCurrentPage(1); }}
+              className={`text-xs font-bold pb-2 transition relative cursor-pointer ${
+                activeTab === "valid"
+                  ? "text-[#5170FF]"
+                  : "text-slate-500 hover:text-slate-900"
+              }`}
+            >
+              Sudah Valid ({initialMetrics.dokumenLengkap})
+              {activeTab === "valid" && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#5170FF] rounded-full" />
+              )}
+            </button>
           </div>
 
-          {/* Card Dokumen Saya */}
-          <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200/90 shadow-xs flex flex-col justify-between">
-            <div>
-              <div className="flex items-center justify-between mb-4">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                  Checklist Dokumen Saya
-                </span>
-                <span className="text-[11px] font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600">
-                  0 Berkas Terunggah
-                </span>
-              </div>
-              <div className="space-y-2 py-4">
-                <h3 className="text-base font-bold text-slate-800">
-                  Kelola & Unggah Berkas Administratif
-                </h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  Unggah Akta Pendirian PT, NIB RBA, Laporan Keuangan, dan Prospektus Usaha untuk dievaluasi kelayakannya oleh sistem assessment.
-                </p>
-                {!user.email_terverifikasi && (
-                  <p className="text-[11px] text-amber-600 font-medium">
-                    * Memerlukan verifikasi email terlebih dahulu sebelum dapat mengunggah dokumen.
-                  </p>
-                )}
-              </div>
-            </div>
+          {/* Table Konten Berkas */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead className="bg-[#FAFBFD] text-slate-400 font-bold uppercase text-[10px] tracking-wider border-b border-slate-100">
+                <tr>
+                  <th className="py-3.5 px-6">NAMA DOKUMEN PERSYARATAN</th>
+                  <th className="py-3.5 px-4">KATEGORI</th>
+                  <th className="py-3.5 px-4">STATUS KURASI</th>
+                  <th className="py-3.5 px-4">TERAKHIR DIPERBAHARUI</th>
+                  <th className="py-3.5 px-4">CATATAN TINDAKAN</th>
+                  <th className="py-3.5 px-6 text-right">AKSI</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 text-slate-700">
+                {paginatedDocs.map((doc) => (
+                  <tr key={doc.id} className="hover:bg-slate-50/60 transition">
+                    
+                    {/* Nama Dokumen & File Info */}
+                    <td className="py-4 px-6 font-semibold text-slate-900">
+                      <div>{doc.nama}</div>
+                      {doc.namaFile && (
+                        <div className="text-[11px] font-normal text-slate-400 mt-0.5 font-mono">
+                          PDF ({Math.round((doc.ukuranKb || 2400) / 1024 * 10) / 10} MB)
+                        </div>
+                      )}
+                    </td>
 
-            <div className="pt-6 mt-4 border-t border-slate-100">
+                    {/* Kategori */}
+                    <td className="py-4 px-4 whitespace-nowrap">
+                      <span className="px-3 py-1 rounded-full text-[11px] font-medium bg-blue-50/80 text-[#5170FF]">
+                        {doc.kategori}
+                      </span>
+                    </td>
+
+                    {/* Status Kurasi */}
+                    <td className="py-4 px-4 whitespace-nowrap">
+                      <span
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold border ${
+                          doc.statusKurasi === "Lengkap & Valid"
+                            ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            : doc.statusKurasi === "Perlu Revisi"
+                            ? "bg-amber-50 text-amber-700 border-amber-200"
+                            : "bg-slate-100 text-slate-600 border-slate-200"
+                        }`}
+                      >
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            doc.statusKurasi === "Lengkap & Valid"
+                              ? "bg-emerald-500"
+                              : doc.statusKurasi === "Perlu Revisi"
+                              ? "bg-amber-500"
+                              : "bg-slate-400"
+                          }`}
+                        />
+                        {doc.statusKurasi}
+                      </span>
+                    </td>
+
+                    {/* Terakhir Diperbaharui */}
+                    <td className="py-4 px-4 whitespace-nowrap text-slate-500 text-[11px]">
+                      {doc.terakhirDiperbaharui}
+                    </td>
+
+                    {/* Catatan Tindakan */}
+                    <td className="py-4 px-4 text-slate-600 text-[11px] max-w-xs leading-relaxed">
+                      {doc.catatanTindakan}
+                    </td>
+
+                    {/* Tombol Aksi Detail */}
+                    <td className="py-4 px-6 text-right whitespace-nowrap">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenDetail(doc)}
+                        className="text-xs font-semibold text-[#5170FF] hover:text-blue-700 hover:underline cursor-pointer"
+                      >
+                        Detail
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination: < 1 2 > */}
+          <div className="py-4 px-6 border-t border-slate-100 flex items-center justify-center gap-2">
+            <button
+              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+              disabled={currentPage === 1}
+              className="w-7 h-7 rounded-lg border border-slate-200 flex items-center justify-center text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
+            >
+              &lt;
+            </button>
+            {Array.from({ length: totalPages }).map((_, idx) => (
               <button
-                type="button"
-                onClick={handleUploadClick}
-                className="w-full inline-flex items-center justify-center py-2.5 px-4 rounded-xl bg-[#0D2063] hover:bg-[#081545] text-xs font-semibold text-white transition cursor-pointer shadow-xs"
+                key={idx}
+                onClick={() => setCurrentPage(idx + 1)}
+                className={`w-7 h-7 rounded-lg text-xs font-semibold flex items-center justify-center cursor-pointer ${
+                  currentPage === idx + 1
+                    ? "bg-[#5170FF] text-white"
+                    : "border border-slate-200 text-slate-600 hover:bg-slate-50"
+                }`}
               >
-                Unggah Dokumen Baru
+                {idx + 1}
               </button>
-            </div>
+            ))}
+            <button
+              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+              disabled={currentPage === totalPages}
+              className="w-7 h-7 rounded-lg border border-slate-200 flex items-center justify-center text-xs text-slate-500 hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
+            >
+              &gt;
+            </button>
           </div>
-
         </div>
 
-        {/* Disclaimer Batas Layanan (US-18) */}
+        {/* Disclaimer Banner (US-18 / BR-01, BR-02) */}
         <DisclaimerBanner />
-
       </main>
 
-      {/* Modal W-VE.5: Unggahan Ditolak (US-24 AC8) */}
-      {showUploadDeniedModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-sm w-full p-6 text-center space-y-4 shadow-xl border border-slate-200 animate-in fade-in zoom-in-95">
-            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center text-xl mx-auto">
-              !
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-slate-900">Unggahan Ditolak</h3>
-              <p className="text-xs text-slate-600 mt-2 leading-relaxed">
-                Verifikasi email Anda terlebih dahulu sebelum mengunggah dokumen administratif dan legalitas.
-              </p>
-            </div>
-            <div className="pt-2 flex flex-col gap-2">
-              <Link
-                href={`/verify-otp?email=${encodeURIComponent(user.email)}`}
-                className="w-full py-2.5 rounded-xl bg-[#0D2063] hover:bg-[#081545] text-white text-xs font-semibold transition"
-              >
-                Verifikasi Email Sekarang
-              </Link>
-              <button
-                type="button"
-                onClick={() => setShowUploadDeniedModal(false)}
-                className="w-full py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition cursor-pointer"
-              >
-                Mengerti
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
+      {/* Modal Detail & Upload Berkas (W-04.1 s/d W-04.10) */}
+      <DocumentModal
+        document={selectedDoc}
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        isEmailVerified={user.email_terverifikasi}
+        hasConsent={hasConsent}
+        onConsentGiven={() => setHasConsent(true)}
+        onUploadSuccess={() => {
+          router.refresh();
+        }}
+      />
     </div>
   );
 }

@@ -11,8 +11,12 @@ export { default as PasswordInput } from "./components/PasswordInput";
 // Business Profile Components
 export { default as BusinessProfileWizard } from "./components/BusinessProfileWizard";
 
-// Dashboard Components
+// Dashboard & Document Tracking Components
 export { default as DashboardView } from "./components/DashboardView";
+export { default as DocumentModal } from "./components/DocumentModal";
+
+// Matchmaking Components (US-05)
+export { default as MatchmakingView } from "./components/MatchmakingView";
 
 // Terms Components
 export { default as DisclaimerBanner } from "./components/DisclaimerBanner";

@@ -46,6 +46,7 @@ export interface BusinessProfileRecord {
   sektor: string;
   kebutuhan_dana: number;
   kondisi_dokumen: string;
+  jenis_efek?: string;
   jangka_waktu_bulan: number;
   tujuan_pendanaan: string;
   rencana_penggunaan: string;
@@ -66,9 +67,87 @@ export interface ProfileActionResult {
   };
 }
 
-/**
- * Tipe Data Domain SCOUT (Securities Crowdfunding Companion)
- */
+export interface DocumentRequirementRecord {
+  id: string;
+  kode: string;
+  nama: string;
+  kategori: "Legalitas" | "Keuangan" | "Operasional" | string;
+  deskripsi: string;
+  wajib: number | boolean;
+  urutan: number;
+}
+
+export interface DocumentRecord {
+  id: string;
+  user_id: string;
+  requirement_id: string;
+  nama_file: string;
+  lokasi_file: string;
+  ukuran_kb: number;
+  status: "lengkap" | "perlu_revisi" | "valid" | string;
+  catatan?: string | null;
+  diunggah_pada: string;
+  diperbarui_pada: string;
+}
+
+export interface DocumentWithRequirement extends DocumentRequirementRecord {
+  documentId?: string;
+  uploaded: boolean;
+  namaFile?: string;
+  ukuranKb?: number;
+  statusKurasi: "Lengkap & Valid" | "Perlu Revisi" | "Belum Diunggah";
+  terakhirDiperbaharui?: string;
+  catatanTindakan?: string;
+}
+
+export interface ConsentRecord {
+  id: string;
+  user_id: string;
+  jenis: string;
+  disetujui: number | boolean;
+  tanggal: string;
+}
+
+export interface PlatformRecord {
+  id: string;
+  nama: string;
+  fokus_sektor: string;
+  badan_hukum_diterima: string;
+  dana_minimum: number;
+  dana_maksimum: number;
+  jenis_efek_didukung: string;
+  estimasi_biaya: number;
+  deskripsi?: string | null;
+  keunggulan?: string | null;
+  aktif: number | boolean;
+  dibuat_pada: string;
+}
+
+export interface MatchmakingPlatformResult {
+  id: string;
+  nama: string;
+  peringkat: number;
+  tingkatKompatibilitas: "Tinggi" | "Sedang" | "Rendah";
+  persentaseKecocokan: number;
+  isPalingCocok: boolean;
+  estimasiBiayaTeks: string;
+  alasanSingkat: string;
+  kriteriaCocok: {
+    sektor: boolean;
+    badanHukum: boolean;
+    kebutuhanDana: boolean;
+    jenisEfek: boolean;
+  };
+  detailPlatform: PlatformRecord;
+}
+
+export interface DocumentActionResult {
+  success: boolean;
+  message?: string;
+  errors?: Record<string, string[]>;
+  data?: any;
+}
+
 export type SektorUsaha =
   | "fnb"
   | "ritel"
@@ -140,9 +219,14 @@ export interface ScfAssessmentResult {
 
 export interface DashboardMetric {
   overallScore: number;
+  statusKelayakan: "Siap Kurasi" | "Butuh Perbaikan" | "Belum Siap";
+  badgeWarna: "emerald" | "amber" | "rose";
   totalDokumen: number;
   dokumenLengkap: number;
   dokumenRevisi: number;
   dokumenKosong: number;
   persentaseSelesai: number;
+  platformCocokCount: number;
+  topMatchRate: number;
+  estimasiWaktuSiap: string;
 }

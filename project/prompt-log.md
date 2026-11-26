@@ -136,3 +136,31 @@ Agent menerima instruksi redesign menyeluruh dengan enam tahapan pengerjaan, mul
 **Catatan:**
 
 Target akhir adalah menghasilkan aplikasi yang benar-benar mencerminkan SCOUT, bukan sekadar aplikasi Simpanku yang berganti nama dan warna.
+
+
+---
+
+## Entri 7. Implementasi Menyeluruh Fitur SCOUT (Document Tracking, Platform Matchmaking, Dasbor Mockup & Assessment)
+
+**Tanggal:** 26 November 2026
+
+**Prompt:**
+Mengimplementasikan seluruh fitur aplikasi SCOUT berdasarkan semua dokumentasi di `product/` (User Story, User Flow, Wireframe, Mockup, dan Database Structure), memastikan seluruh dokumentasi terpusat di `product/auth/` dan seluruh kode implementasi berada di `modules/auth/`, serta skema database tunggal di `db/schema.prisma`.
+
+**Hasil Implementasi:**
+1. **Dokumentasi Produk:**
+   - Menambahkan dan merapikan dokumentasi US-04 (Document Tracking) dan US-05 (Platform Matchmaking) ke `product/auth/` (`database-us-04.md`, `user-stories-us-04.md`, `user-flow-us-04.md`, `wireframe-us-04.md`, `database-us-05.md`, `user-stories-us-05.md`, `user-flow-us-05.md`, `wireframe-us-05.md`).
+2. **Skema Database & ORM:**
+   - Memperbarui skema `db/schema.prisma` dengan model `Platform`, `DocumentRequirement`, `Document`, `Consent`, serta field instrumen `jenisEfek` pada `BusinessProfile`.
+   - Mengimplementasikan runtime SQLite di `modules/auth/utils/db.ts` dengan auto-seed platform resmi (Bizhare, Santara, Shafiq, LandX) dan 6 berkas standar SCF.
+3. **Fitur Document Tracking (US-04):**
+   - Implementasi tabel pelacakan berkas interaktif dengan filter tab (*Semua Berkas*, *Perlu Perhatian*, *Sudah Valid*).
+   - Modal detail & unggah berkas (`DocumentModal.tsx`) sesuai wireframe W-04.1 hingga W-04.10, lengkap dengan validasi format (PDF, JPG, PNG maks 5MB), pratinjau berkas, dan persetujuan privasi (US-17/consents).
+4. **Fitur Platform Matchmaking (US-05):**
+   - Menghitung kecocokan dinamis berdasarkan 4 kriteria objektif: sektor, badan hukum, rentang kebutuhan dana, dan jenis instrumen efek (BR-06, BR-07).
+   - Implementasi tampilan kecocokan (`MatchmakingView.tsx`) sesuai alur W-KC.1 (profil belum lengkap), W-KC.3 (indikator pencocokan), dan W-KC.4 (daftar terurut, label PALING COCOK, bar kompatibilitas, estimasi biaya, dan disclaimer indikatif).
+5. **UI Dasbor Penerbit UKM:**
+   - Menyesuaikan tampilan dasbor (`DashboardView.tsx`) dengan fidelity tinggi sesuai mockup pengguna: Kartu profil UKM, SCF Readiness Score (0-100), Status Kelayakan (*Siap Kurasi*), 4 Kartu Metrik Statistik, dan Tabel Pelacakan Dokumen.
+6. **Verifikasi & Build:**
+   - Build Next.js (`npm run build`) berhasil 100% tanpa error.
+   - Script integrasi berhasil memverifikasi seluruh fungsi inti database dan algoritma.
